@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# template leftovers kept out of the build
+/.template-unused
