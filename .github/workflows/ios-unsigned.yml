@@ -39,10 +39,17 @@ jobs:
       - name: Build unsigned archive
         run: |
           set -euo pipefail
+          PROJECT=$(ls -d ios/*.xcodeproj | head -n 1)
+          APP_NAME=$(basename "$PROJECT" .xcodeproj)
           WORKSPACE=$(ls -d ios/*.xcworkspace | head -n 1)
-          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list -json | jq -r '.workspace.schemes[0]')
+          SCHEME="$APP_NAME"
           echo "Workspace: $WORKSPACE"
           echo "Scheme: $SCHEME"
+          xcodebuild -workspace "$WORKSPACE" -list
+          if ! xcodebuild -workspace "$WORKSPACE" -list -json | jq -e --arg s "$SCHEME" '.workspace.schemes | index($s)' > /dev/null; then
+            echo "::error::Scheme '$SCHEME' not found in $WORKSPACE"
+            exit 1
+          fi
           xcodebuild archive \
             -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
@@ -58,7 +65,10 @@ jobs:
       - name: Package IPA
         run: |
           set -euo pipefail
-          APP=$(find "$RUNNER_TEMP/App.xcarchive/Products/Applications" -maxdepth 1 -name "*.app" -print -quit)
+          APPS_DIR="$RUNNER_TEMP/App.xcarchive/Products/Applications"
+          ls -la "$APPS_DIR" || { echo "::error::No Applications dir in archive"; exit 1; }
+          APP=$(find "$APPS_DIR" -maxdepth 1 -name "*.app" -print -quit)
+          test -n "$APP" || { echo "::error::No .app found in archive"; exit 1; }
           echo "App: $APP"
           mkdir -p out/Payload
           cp -R "$APP" out/Payload/
